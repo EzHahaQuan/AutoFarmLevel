@@ -1,0 +1,175 @@
+--[[
+    FARM EVADE MENU Script
+    Features:
+    - Simple GUI menu with ON/OFF toggle.
+    - When ON: Teleports you far below the map (afk farming), with anti-AFK.
+    - When OFF: Returns you to spawn area (or above map), disables anti-AFK.
+    - For "Evade" on Roblox (may work in similar games).
+    - For educational purposes only.
+]]
+ 
+-- CONFIG (change Y_OFFSET_DOWN if you want deeper)
+local Y_OFFSET_DOWN = -300 -- how far below map to go
+local Y_OFFSET_UP = 10 -- height above spawn when OFF
+ 
+-- GUI elements
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local ToggleBtn = Instance.new("TextButton")
+local StatusLabel = Instance.new("TextLabel")
+local TitleLabel = Instance.new("TextLabel")
+local CloseBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
+ 
+ScreenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Name = "FarmEvadeMenu"
+ 
+Frame.Parent = ScreenGui
+Frame.Size = UDim2.new(0, 250, 0, 170)
+Frame.Position = UDim2.new(0.5, -125, 0.5, -85)
+Frame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+UICorner.Parent = Frame
+ 
+TitleLabel.Parent = Frame
+TitleLabel.Size = UDim2.new(1, 0, 0.2, 0)
+TitleLabel.Position = UDim2.new(0, 0, 0, 0)
+TitleLabel.Text = "FARM EVADE"
+TitleLabel.TextColor3 = Color3.fromRGB(255,255,80)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextSize = 24
+ 
+ToggleBtn.Parent = Frame
+ToggleBtn.Position = UDim2.new(0.15, 0, 0.45, 0)
+ToggleBtn.Size = UDim2.new(0.7, 0, 0.22, 0)
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 90)
+ToggleBtn.Text = "FARM: OFF"
+ToggleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+ToggleBtn.TextSize = 20
+local toggleUICorner = UICorner:Clone()
+toggleUICorner.Parent = ToggleBtn
+ 
+StatusLabel.Parent = Frame
+StatusLabel.Position = UDim2.new(0.1, 0, 0.7, 0)
+StatusLabel.Size = UDim2.new(0.8, 0, 0.18, 0)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.TextColor3 = Color3.fromRGB(255,255,255)
+StatusLabel.TextSize = 16
+StatusLabel.Text = "Status: Idle"
+ 
+CloseBtn.Parent = Frame
+CloseBtn.Position = UDim2.new(0.85, 0, 0, 10)
+CloseBtn.Size = UDim2.new(0.15, -10, 0.15, -10)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
+CloseBtn.TextSize = 18
+local closeUICorner = UICorner:Clone()
+closeUICorner.Parent = CloseBtn
+ 
+-- Farming/Antiafk logic
+local farming = false
+local antiafkConn = nil
+local farmThread = nil
+ 
+function teleportDown()
+    local player = game.Players.LocalPlayer
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local root = player.Character.HumanoidRootPart
+        root.Velocity = Vector3.new()
+        root.CFrame = CFrame.new(root.Position.X, Y_OFFSET_DOWN, root.Position.Z)
+    end
+end
+ 
+function teleportUp()
+    local player = game.Players.LocalPlayer
+    if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+        local root = player.Character.HumanoidRootPart
+        -- Try to move above spawn, or just move up from current position
+        root.CFrame = CFrame.new(root.Position.X, Y_OFFSET_UP, root.Position.Z)
+    end
+end
+ 
+function startAntiafk()
+    -- Prevent Roblox AFK kick
+    if antiafkConn then antiafkConn:Disconnect() end
+    antiafkConn = game:GetService("Players").LocalPlayer.Idled:Connect(function()
+        game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        wait(1)
+        game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    end)
+end
+ 
+function stopAntiafk()
+    if antiafkConn then
+        antiafkConn:Disconnect()
+        antiafkConn = nil
+    end
+end
+ 
+function startFarm()
+    farming = true
+    StatusLabel.Text = "Status: FARM ON (AFK)"
+    ToggleBtn.Text = "FARM: ON"
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(80, 220, 120)
+    startAntiafk()
+    farmThread = task.spawn(function()
+        while farming do
+            teleportDown()
+            wait(1.5)
+        end
+    end)
+end
+ 
+function stopFarm()
+    farming = false
+    StatusLabel.Text = "Status: Idle"
+    ToggleBtn.Text = "FARM: OFF"
+    ToggleBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 90)
+    stopAntiafk()
+    teleportUp()
+    if farmThread then
+        farmThread = nil
+    end
+end
+ 
+ToggleBtn.MouseButton1Click:Connect(function()
+    if not farming then
+        startFarm()
+    else
+        stopFarm()
+    end
+end)
+ 
+CloseBtn.MouseButton1Click:Connect(function()
+    stopFarm()
+    ScreenGui:Destroy()
+end)
+ 
+-- Dragging support
+local dragging, dragStart, startPos
+ 
+Frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+ 
+Frame.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Frame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
